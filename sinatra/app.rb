@@ -27,6 +27,9 @@ configure :development do
   # require 'sinatra/reloader'
   # enable :reloader
   # register Sinatra::Reloader
+  file = File.new("#{__dir__}/logs/app.log", 'a+')
+  file.sync = true
+  use Rack::CommonLogger, file
 end
 
 # GrantedByMe API key data folder
@@ -114,52 +117,52 @@ post '/ajax' do
   end
   # logger.info "operation: #{operation}"
   if params[:operation] == 'getSessionToken'
-    result = grantedbyme.get_session_token
+    result = grantedbyme.get_challenge(GrantedByMe.challenge_session)
   elsif params[:operation] == 'getSessionState'
-    result = grantedbyme.get_token_state(params[:token])
+    result = grantedbyme.get_challenge_state(params[:challenge])
     if result['success'] and result['status'] == 3
-      grantor = result['grantor']
-      user_id = redis.get 'user_id_by_grantor_' + grantor
+      authenticator_secret = result['authenticator_secret']
+      user_id = redis.get 'user_id_by_authenticator_secret_' + authenticator_secret
       if user_id
         session[:logged_in] = true
         session[:user_id] = user_id
         flash_log 'Logged in user: ' + user_id
       end
-      result.delete('grantor')
+      result.delete('authenticator_secret')
     end
   elsif params[:operation] == 'getAccountToken'
-    result = grantedbyme.get_account_token
+    result = grantedbyme.get_challenge(GrantedByMe.challenge_account)
   elsif params[:operation] == 'getAccountState'
-    result = grantedbyme.get_token_state(params[:token])
+    result = grantedbyme.get_challenge_state(params[:challenge])
     if result['success'] and result['status'] == 3
-      grantor = grantedbyme.get_random_string(128)
-      link_result = grantedbyme.link_account(params[:token], grantor)
+      authenticator_secret = GrantedByMe.generate_authenticator_secret
+      link_result = grantedbyme.link_account(params[:challenge], authenticator_secret)
       if link_result['success']
         user_id = session[:user_id]
         user_data = JSON.parse(redis.get('user_by_id_' + user_id))
-        user_data['grantor'] = grantor
+        user_data['authenticator_secret'] = authenticator_secret
         redis.set 'user_by_id_' + user_id, user_data.to_json
-        redis.set 'user_id_by_grantor_' + grantor, user_id
+        redis.set 'user_id_by_authenticator_secret_' + authenticator_secret, user_id
         flash_log 'User account updated: ' + user_id
       end
     end
   elsif params[:operation] == 'getRegisterToken'
-    result = grantedbyme.get_register_token
+    result = grantedbyme.get_challenge(GrantedByMe.challenge_register)
   elsif params[:operation] == 'getRegisterState'
-    result = grantedbyme.get_token_state(params[:token])
+    result = grantedbyme.get_challenge_state(params[:challenge])
     if result['success'] and result['status'] == 3
       logger.info result['data']
-      grantor = grantedbyme.get_random_string(128)
-      link_result = grantedbyme.link_account(params[:token], grantor)
+      authenticator_secret = GrantedByMe.generate_authenticator_secret
+      link_result = grantedbyme.link_account(params[:challenge], authenticator_secret)
       if link_result['success']
         redis.incr 'user_counter'
         user_id = redis.get 'user_counter'
         email = result['data']['email']
         first_name = result['data']['first_name']
         last_name = result['data']['last_name']
-        user_data = {'grantor': grantor, 'email': email, 'first_name': first_name, 'last_name': last_name, 'user_id': user_id}
+        user_data = {'authenticator_secret': authenticator_secret, 'email': email, 'first_name': first_name, 'last_name': last_name, 'user_id': user_id}
         redis.set 'user_by_id_' + user_id, user_data.to_json
-        redis.set 'user_id_by_grantor_' + grantor, user_id
+        redis.set 'user_id_by_authenticator_secret_' + authenticator_secret, user_id
         redis.set 'user_id_by_email_' + email, user_id
         flash_log 'User account created: ' + user_id
       end
@@ -178,16 +181,36 @@ end
 ########################################
 
 post '/callback' do
-  cipher_request = {}
-  cipher_request['signature'] = params[:signature]
-  cipher_request['payload'] = params[:payload]
-  cipher_request['message'] = params[:message]
-  plain_request = grantedbyme.get_crypto.decrypt(params, grantedbyme.get_private_key, grantedbyme.get_server_key)
-  logger.info "callback: #{plain_request}"
-  plain_result = {}
-  plain_result['success'] = false
-  # logger.info "plain_result: #{plain_result}"
-  encrypted_result = grantedbyme.get_crypto.encrypt(plain_result, grantedbyme.get_private_key, grantedbyme.get_server_key)
-  # logger.info "encrypted_result: #{encrypted_result}"
-  return encrypted_result
+  result = {'success': false}
+  if params.has_key?('signature') and params.has_key?('payload')
+    cipher_request = {}
+    cipher_request['signature'] = params[:signature]
+    cipher_request['payload'] = params[:payload]
+    if params.has_key?('message')
+      cipher_request['message'] = params[:message]
+    end
+    plain_request = grantedbyme.get_crypto.decrypt(cipher_request)
+    logger.info "callback: #{plain_request}"
+    plain_result = {}
+    plain_result['success'] = false
+    if plain_request.has_key?('operation')
+      if plain_request['operation'] == 'ping'
+        plain_result['success'] = true
+      elsif plain_request['operation'] == 'unlink_account'
+        # TODO: implement
+      elsif plain_request['operation'] == 'rekey_account'
+        # TODO: implement
+      else
+        logger.info "callback operation not handled: #{plain_request['operation']}"
+      end
+    end
+    # logger.info "plain_result: #{plain_result}"
+    result = grantedbyme.get_crypto.encrypt(plain_result)
+    # logger.info "result: #{result}"
+  end
+  if result.class == Hash
+    return result.to_json
+  end
+  result
 end
+
