@@ -117,7 +117,7 @@ post '/ajax' do
   end
   # logger.info "operation: #{operation}"
   if params[:operation] == 'getSessionToken'
-    result = grantedbyme.get_challenge(GrantedByMe.challenge_session)
+    result = grantedbyme.get_challenge(GrantedByMe.challenge_authenticate)
   elsif params[:operation] == 'getSessionState'
     result = grantedbyme.get_challenge_state(params[:challenge])
     if result['success'] and result['status'] == 3
@@ -131,7 +131,7 @@ post '/ajax' do
       result.delete('authenticator_secret')
     end
   elsif params[:operation] == 'getAccountToken'
-    result = grantedbyme.get_challenge(GrantedByMe.challenge_account)
+    result = grantedbyme.get_challenge(GrantedByMe.challenge_authorize)
   elsif params[:operation] == 'getAccountState'
     result = grantedbyme.get_challenge_state(params[:challenge])
     if result['success'] and result['status'] == 3
@@ -147,7 +147,7 @@ post '/ajax' do
       end
     end
   elsif params[:operation] == 'getRegisterToken'
-    result = grantedbyme.get_challenge(GrantedByMe.challenge_register)
+    result = grantedbyme.get_challenge(GrantedByMe.challenge_profile)
   elsif params[:operation] == 'getRegisterState'
     result = grantedbyme.get_challenge_state(params[:challenge])
     if result['success'] and result['status'] == 3
