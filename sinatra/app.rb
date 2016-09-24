@@ -197,9 +197,17 @@ post '/callback' do
       if plain_request['operation'] == 'ping'
         plain_result['success'] = true
       elsif plain_request['operation'] == 'unlink_account'
-        # TODO: implement
+        if plain_request.has_key?('authenticator_secret_hash')
+            # TODO: implement
+        end
       elsif plain_request['operation'] == 'rekey_account'
-        # TODO: implement
+        if plain_request.has_key?('authenticator_secret_hash')
+            # TODO: implement
+        end
+      elsif plain_request['operation'] == 'revoke_challenge'        
+        if plain_request.has_key?('challenge')
+            # TODO: implement
+        end
       else
         logger.info "callback operation not handled: #{plain_request['operation']}"
       end
