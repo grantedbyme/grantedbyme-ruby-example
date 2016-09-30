@@ -116,9 +116,9 @@ post '/ajax' do
     return result
   end
   # logger.info "operation: #{operation}"
-  if params[:operation] == 'getSessionToken'
-    result = grantedbyme.get_challenge(GrantedByMe.challenge_authenticate)
-  elsif params[:operation] == 'getSessionState'
+  if params[:operation] == 'getChallenge'
+    result = grantedbyme.get_challenge(params[:challenge_type].to_i)
+  elsif params[:operation] == 'getChallengeState' and params[:challenge_type] == '2'
     result = grantedbyme.get_challenge_state(params[:challenge])
     if result['success'] and result['status'] == 3
       authenticator_secret = result['authenticator_secret']
@@ -130,9 +130,7 @@ post '/ajax' do
       end
       result.delete('authenticator_secret')
     end
-  elsif params[:operation] == 'getAccountToken'
-    result = grantedbyme.get_challenge(GrantedByMe.challenge_authorize)
-  elsif params[:operation] == 'getAccountState'
+  elsif params[:operation] == 'getChallengeState' and params[:challenge_type] == '1'
     result = grantedbyme.get_challenge_state(params[:challenge])
     if result['success'] and result['status'] == 3
       authenticator_secret = GrantedByMe.generate_authenticator_secret
@@ -146,9 +144,7 @@ post '/ajax' do
         flash_log 'User account updated: ' + user_id
       end
     end
-  elsif params[:operation] == 'getRegisterToken'
-    result = grantedbyme.get_challenge(GrantedByMe.challenge_profile)
-  elsif params[:operation] == 'getRegisterState'
+  elsif params[:operation] == 'getChallengeState' and params[:challenge_type] == '4'
     result = grantedbyme.get_challenge_state(params[:challenge])
     if result['success'] and result['status'] == 3
       logger.info result['data']
